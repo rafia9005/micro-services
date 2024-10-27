@@ -16,4 +16,3 @@ func AuthRoutes(router fiber.Router) {
   router.Get("/auth/github", handlers.AuthGithub)
   router.Get("/auth/github/callback", handlers.CallbackAuthGithub)
 }
-
