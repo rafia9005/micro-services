@@ -2,7 +2,8 @@ package main
 
 import (
 	"log"
-	"micro/internal/handlers"
+	"micro/config"
+	"micro/internal/routes"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/joho/godotenv"
@@ -16,7 +17,8 @@ func main() {
 		log.Fatalf("Error loading .env file: %v", err)
 	}
 
-	handlers.Setup(app)
+  config.Connect()
+	routes.AuthRoutes(app)
 
 	app.Listen(":3000")
 }
