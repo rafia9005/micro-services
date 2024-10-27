@@ -2,10 +2,10 @@ package services
 
 import (
 	"fmt"
-	"micro/config"
 	"micro/internal/middleware"
 	"micro/internal/models/entity"
 	"micro/internal/models/request"
+	"micro/internal/repositories"
 	"micro/internal/utils"
 	"time"
 
@@ -13,15 +13,17 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
+type AuthService struct {
+	userRepo repositories.UserRepository
+}
+
+func NewAuthService(userRepo repositories.UserRepository) *AuthService {
+	return &AuthService{userRepo: userRepo}
+}
+
 func ValidateLogin(loginRequest *request.LoginRequest) error {
 	validate := validator.New()
 	return validate.Struct(loginRequest)
-}
-
-func GetUserByEmail(email string) (*entity.Users, error) {
-	var user entity.Users
-	err := config.DB.First(&user, "email = ?", email).Error
-	return &user, err
 }
 
 func GenerateJWTToken(user *entity.Users) (string, error) {
@@ -45,17 +47,19 @@ func ValidateRegister(registerRequest *request.RegisterRequest) error {
 	return validate.Struct(registerRequest)
 }
 
-func HashAndStoreUser(registerRequest *request.RegisterRequest) (string, error) {
-	var existingUser entity.Users
-	if err := config.DB.First(&existingUser, "email = ?", registerRequest.Email).Error; err == nil {
+func (s *AuthService) HashAndStoreUser(registerRequest *request.RegisterRequest) (string, error) {
+	// Cek apakah pengguna sudah ada
+	if _, err := s.userRepo.GetByEmail(registerRequest.Email); err == nil {
 		return "", fmt.Errorf("user with email %s already exists", registerRequest.Email)
 	}
 
+	// Hash password
 	hashedPassword, err := middleware.HashPassword(registerRequest.Password)
 	if err != nil {
 		return "", err
 	}
 
+	// Buat pengguna baru
 	newUser := entity.Users{
 		Name:      fmt.Sprintf("%s %s", registerRequest.FirstName, registerRequest.LastName),
 		FirstName: registerRequest.FirstName,
@@ -66,20 +70,16 @@ func HashAndStoreUser(registerRequest *request.RegisterRequest) (string, error) 
 		Verify:    true,
 	}
 
-	if err := config.DB.Create(&newUser).Error; err != nil {
+	// Simpan pengguna baru di database
+	if err := s.userRepo.Create(&newUser); err != nil {
 		return "", err
 	}
 
 	return fmt.Sprintf("User %s registered successfully", newUser.Email), nil
 }
 
-func UpdateUser(user *entity.Users) error {
-	return config.DB.Save(user).Error
-}
-
-func AuthenticateUser(email, password string) (*entity.Users, error) {
-	var user entity.Users
-	err := config.DB.First(&user, "email = ?", email).Error
+func (s *AuthService) AuthenticateUser(email, password string) (*entity.Users, error) {
+	user, err := s.userRepo.GetByEmail(email)
 	if err != nil {
 		return nil, err
 	}
@@ -88,5 +88,5 @@ func AuthenticateUser(email, password string) (*entity.Users, error) {
 		return nil, fmt.Errorf("invalid password")
 	}
 
-	return &user, nil
+	return user, nil
 }

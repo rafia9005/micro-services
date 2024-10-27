@@ -7,11 +7,22 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 )
+// AuthHandler struct untuk menyimpan dependensi
+type AuthHandler struct {
+	authService *services.AuthService
+}
 
-func Login(c *fiber.Ctx) error {
+func NewAuthHandler(authService *services.AuthService) *AuthHandler {
+	return &AuthHandler{authService: authService}
+}
+
+func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	loginRequest := new(request.LoginRequest)
 	if err := c.BodyParser(loginRequest); err != nil {
-		return err
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"message": "Invalid request body",
+			"error":   err.Error(),
+		})
 	}
 
 	if errValidate := services.ValidateLogin(loginRequest); errValidate != nil {
@@ -21,7 +32,7 @@ func Login(c *fiber.Ctx) error {
 		})
 	}
 
-	user, err := services.AuthenticateUser(loginRequest.Email, loginRequest.Password)
+	user, err := h.authService.AuthenticateUser(loginRequest.Email, loginRequest.Password)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"message": "Invalid email or password",
@@ -47,10 +58,13 @@ func Login(c *fiber.Ctx) error {
 	})
 }
 
-func Register(c *fiber.Ctx) error {
+func (h *AuthHandler) Register(c *fiber.Ctx) error {
 	registerRequest := new(request.RegisterRequest)
 	if err := c.BodyParser(registerRequest); err != nil {
-		return err
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"message": "Invalid request body",
+			"error":   err.Error(),
+		})
 	}
 
 	if errValidate := services.ValidateRegister(registerRequest); errValidate != nil {
@@ -60,7 +74,7 @@ func Register(c *fiber.Ctx) error {
 		})
 	}
 
-	result, err := services.HashAndStoreUser(registerRequest)
+	result, err := h.authService.HashAndStoreUser(registerRequest)
 	if err != nil {
 		if err.Error() == fmt.Sprintf("user with email %s already exists", registerRequest.Email) {
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
@@ -73,7 +87,8 @@ func Register(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{
-		"status":  result,
-		"message": "Registration successful! Please check your email for the verification code",
+		"status":  true,
+		"message": result,
 	})
 }
+

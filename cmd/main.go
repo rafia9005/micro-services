@@ -18,6 +18,7 @@ func main() {
 	}
 
   config.Connect()
+
 	routes.AuthRoutes(app)
 
 	app.Listen(":3000")
