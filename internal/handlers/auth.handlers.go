@@ -2,12 +2,15 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"micro/internal/models/request"
 	"micro/internal/provider"
 	"micro/internal/services"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"gorm.io/gorm"
 )
 
 func Login(c *fiber.Ctx) error {
@@ -77,90 +80,6 @@ func Register(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"status":  result,
 		"message": "Registration successful! Please check your email for the verification code",
-	})
-}
-
-func VerifyCode(c *fiber.Ctx) error {
-	type VerifyRequest struct {
-		Token string `json:"token"`
-	}
-
-	verifyRequest := new(VerifyRequest)
-	if err := c.BodyParser(verifyRequest); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"message": "Invalid request",
-		})
-	}
-
-	verifyToken, err := services.GetVerifyToken(verifyRequest.Token)
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"message": "Invalid or expired verification code",
-		})
-	}
-
-	user, err := services.GetUserByID(verifyToken.UserID)
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"message": "User not found",
-		})
-	}
-
-	user.Verify = true
-	if err := services.UpdateUser(user); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"message": "Failed to verify user",
-		})
-	}
-
-	if err := services.DeleteVerifyToken(verifyToken.ID); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"message": "Failed to delete verification token",
-		})
-	}
-
-	return c.JSON(fiber.Map{
-		"status":  true,
-		"message": "Email verified successfully",
-	})
-}
-
-func ResendVerifyRequest(c *fiber.Ctx) error {
-	resendRequest := new(request.ResendVerifyRequest)
-	if err := c.BodyParser(resendRequest); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"message": "Invalid request",
-		})
-	}
-
-	user, err := services.GetUserByEmail(resendRequest.Email)
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"message": "User not found",
-		})
-	}
-
-	if user.Verify {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"message": "Account is already verified",
-		})
-	}
-
-	if err := services.DeleteVerifyTokenByUserID(user.ID); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"message": "Failed to delete old verification token",
-		})
-	}
-
-	if err := services.GenerateAndSendVerificationToken(user); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"message": "Failed to generate and send verification token",
-		})
-	}
-
-	return c.JSON(fiber.Map{
-		"status":  true,
-		"message": "Verification token has been resent. Please check your email.",
 	})
 }
 
@@ -248,6 +167,7 @@ func CallbackAuthGoogle(c *fiber.Ctx) error {
 	if existingUser.Provider != nil && *existingUser.Provider != "google" {
 		return c.Status(400).JSON(fiber.Map{
 			"status":  "error",
+      "provider" : existingUser.Provider,
 			"message": fmt.Sprintf("Your account is already registered with provider '%s'", *existingUser.Provider),
 		})
 	}
@@ -371,6 +291,7 @@ func CallbackAuthGithub(c *fiber.Ctx) error {
 	if existingUser.Provider != nil && *existingUser.Provider != "github" {
 		return c.Status(400).JSON(fiber.Map{
 			"status":  "error",
+      "provider" : existingUser.Provider,
 			"message": fmt.Sprintf("Your account is already registered with provider '%s'", *existingUser.Provider),
 		})
 	}

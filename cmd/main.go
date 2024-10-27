@@ -18,8 +18,8 @@ func main() {
 	}
 
   config.Connect()
-
-	routes.AuthRoutes(app)
+  api := app.Group("/api")
+	routes.AuthRoutes(api)
 
 	app.Listen(":3000")
 }
